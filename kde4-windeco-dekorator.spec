@@ -4,7 +4,7 @@ Summary:        Themable and Customizable Window Decoration Engine for KDE 4
 License:        GPLv2+
 Url:            http://www.kde-look.org/content/show.php?content=87921
 Version:        0.5.1
-Release:        5
+Release:        6
 Source0:        dekorator-%{version}.tar.bz2
 Source1:        elementary-emerald-theme.tar.gz
 Source2:        kwindeKoratorrc
