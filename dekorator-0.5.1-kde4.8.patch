@@ -1,0 +1,61 @@
+diff -urN dekorator-0.5.1/client/deKoratorclient.cc dekorator-0.5.1-patched/client/deKoratorclient.cc
+--- dekorator-0.5.1/client/deKoratorclient.cc	2010-03-31 13:37:08.000000000 +1100
++++ dekorator-0.5.1-patched/client/deKoratorclient.cc	2012-03-23 21:56:39.780381350 +1100
+@@ -1062,6 +1062,10 @@
+             image = chooseRightHoverEffect( image, ANIMATIONTYPE );
+     }
+ 
++    if ( !client_->compositingActive () )
++    {
++        painter.drawPixmap( dx, 0, decoPixmap[ midTitle ][ waState ]);
++    }
+     painter.drawImage( dx, dy, image );
+ 
+ 
+@@ -1210,7 +1214,7 @@
+ // ---------------
+ // Constructor
+ DeKoratorClient::DeKoratorClient( KDecorationBridge * b, KDecorationFactory * f )
+-        : KDecoration( b, f ), mainLayout_( NULL ), titleLayout_( NULL ), midLayout_( NULL ) , leftTitleBarSpacer_( NULL ), titleBarSpacer_( NULL ), rightTitleBarSpacer_( NULL ), leftSpacer_( NULL ), rightSpacer_( NULL ), bottomSpacer_( NULL ), captionBufferDirty_( true )
++        : KDecoration( b, f ), mainLayout_( NULL ), titleLayout_( NULL ), midLayout_( NULL ) , leftTitleBarSpacer_( NULL ), titleBarSpacer_( NULL ), rightTitleBarSpacer_( NULL ), leftSpacer_( NULL ), rightSpacer_( NULL ), bottomSpacer_( NULL ), captionBufferDirty_( true ), bridge_( b )
+ {
+     //captionBufferDirty_ = true;
+     //maskDirty_ = true;
+@@ -2305,5 +2309,10 @@
+     setMask( mask_ );
+ }
+ 
++bool DeKoratorClient::compositingActive() const
++{
++    return static_cast< KDecorationBridgeUnstable* >(bridge_)->compositingActive();
++}
++
+ 
+ #include "deKoratorclient.moc"
+diff -urN dekorator-0.5.1/client/deKoratorclient.h dekorator-0.5.1-patched/client/deKoratorclient.h
+--- dekorator-0.5.1/client/deKoratorclient.h	2010-03-31 11:44:11.000000000 +1100
++++ dekorator-0.5.1-patched/client/deKoratorclient.h	2012-03-23 19:44:03.000000000 +1100
+@@ -37,6 +37,7 @@
+ 
+ #include <kdecorationfactory.h>
+ #include <kdecoration.h>
++#include <kdecorationbridge.h>
+ 
+ #include <QtGui/QAbstractButton>
+ #include <QtGui/QBitmap>
+@@ -250,6 +251,7 @@
+     virtual void iconChange();
+     virtual void maximizeChange();
+     virtual void shadeChange();
++    bool compositingActive() const;
+ 
+     virtual void borders( int &l, int &r, int &t, int &b ) const;
+     virtual void resize( const QSize &size );
+@@ -267,6 +269,7 @@
+     void showEvent( QShowEvent * );
+     void doShape();
+     void updateCaptionBuffer();
++    KDecorationBridge *bridge_;
+ 
+ 
+ private slots:
