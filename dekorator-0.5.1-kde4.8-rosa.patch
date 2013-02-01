@@ -1,0 +1,433 @@
+diff -urN dekorator-0.5.1/client/deKoratorclient.cc dekorator-0.5.1-rosa/client/deKoratorclient.cc
+--- dekorator-0.5.1/client/deKoratorclient.cc	2010-03-31 13:37:08.000000000 +1100
++++ dekorator-0.5.1-rosa/client/deKoratorclient.cc	2012-03-23 23:35:03.000000000 +1100
+@@ -1001,13 +1001,34 @@
+ // paintEvent()
+ // ------------
+ // Draw the button
+-void DeKoratorButton::paintEvent( QPaintEvent * /*e*/ )
++void DeKoratorButton::paintEvent( QPaintEvent * e )
+ {
+     int dx = 0, dy = 0;
+     bool act = client_->isActive();
+     WindowActivationState waState = act ? WindowActive : WindowInactive;
+     QImage image;
+-    QPainter painter( this );
++
++    QPainter painter;
++    
++    if( client_->compositingActive() )
++      {
++        painter.begin( this );
++        
++        painter.setRenderHints(QPainter::Antialiasing);
++        painter.setClipRegion( e->region() );
++      }
++    else
++      {
++        painter.begin( &renderBuffer_ );
++
++        painter.setRenderHints(QPainter::Antialiasing);
++        painter.setClipRect( this->rect().intersected( e->rect() ) );
++
++        painter.save();
++        painter.translate( -geometry().topLeft() );
++        client_->paint( painter );
++        painter.restore();
++      }
+ 
+     // apply app icon effects
+     if ( type_ == ButtonMenu && !USEMENUEIMAGE )
+@@ -1070,6 +1091,22 @@
+         painter.setPen( QColor( 70, 70, 70 ) );
+         painter.drawLine( 0, BUTTONSHEIGHT - 1, buttonWidth_ - 1, BUTTONSHEIGHT - 1 );
+     }
++
++    if( ! client_->compositingActive() )
++      {
++        QPainter widgetPainter( this );
++        widgetPainter.setClipRegion( e->region() );
++        widgetPainter.drawPixmap( QPoint(), renderBuffer_ );
++      }
++}
++
++//////////////////////////////////////////////////////////////////////////////
++// resizeEvent()
++// ------------
++//
++void DeKoratorButton::resizeEvent( QResizeEvent *e )
++{
++    renderBuffer_ = QPixmap( e->size() );
+ }
+ 
+ //////////////////////////////////////////////////////////////////////////////
+@@ -1214,6 +1251,7 @@
+ {
+     //captionBufferDirty_ = true;
+     //maskDirty_ = true;
++  bridge_ = b;
+ }
+ 
+ DeKoratorClient::~DeKoratorClient()
+@@ -1797,6 +1835,10 @@
+     return Position( pos );
+ }
+ 
++bool DeKoratorClient::compositingActive() const
++{
++  return static_cast< KDecorationBridgeUnstable* >(bridge_)->compositingActive();
++}
+ 
+ //////////////////////////////////////////////////////////////////////////////
+ // eventFilter()
+@@ -1930,131 +1972,167 @@
+ // paintEvent()
+ // ------------
+ // Repaint the window
+-void DeKoratorClient::paintEvent( QPaintEvent* )
++void DeKoratorClient::paintEvent( QPaintEvent* e )
+ {
+-    WindowActivationState waState = isActive() ? WindowActive : WindowInactive;
+-
+     if ( TITLESIZE )
+     {
+         if ( captionBufferDirty_ && USESHDTEXT )
+             updateCaptionBuffer();
+ 
+-        QPainter painter( widget() );
+-        int tx, ty, tw, th;
+-        int w = width() , h = height();
+-        QRect titleR( titleBarSpacer_->geometry() );
+-        QRect leftTitleR( leftTitleBarSpacer_->geometry() );
+-        QRect rightTitleR( rightTitleBarSpacer_->geometry() );
+-        titleR.getRect( &tx, &ty, &tw, &th );
+-        QRect rect;
++        QPainter painter;
++        
++        if( compositingActive() )
++          {
++            painter.begin( widget() );
++          }
++        else
++          {
++            painter.begin( &renderBuffer_ );
++          }
+ 
+-        {
+-            // topLeftCorner
+ 
+-            if ( leftTitleR.width() > 0 )
+-            {
+-                rect.setRect( 0, 0, TOPLEFTCORNERWIDTH, TITLESIZE );
+-                painter.drawPixmap( rect, decoPixmap[ topLeftCorner ][ waState ] );
+-            }
++        // INTERSECTION
+ 
+-            // Space under the left button group
+-            painter.drawTiledPixmap( leftTitleR.right() + 1, titleR.top(),
+-                                      ( titleR.left() - 1 ) - leftTitleR.right(), titleR.height(), decoPixmap[ leftButtons ][ waState ] );
+-
+-            drawHorizontalTiled( &painter, QRect( tx, 0, tw, TITLESIZE ),
+-                decoPixmap[ leftTitle ][ waState ],
+-                decoPixmap[ midTitle ][ waState ],
+-                decoPixmap[ rightTitle ][ waState ] );
+-
+-            // Space under the right button group
+-            painter.drawTiledPixmap( titleR.right() + 1, titleR.top(),
+-                                      ( rightTitleR.left() - 1 ) - titleR.right(), titleR.height(), decoPixmap[ rightButtons ][ waState ] );
++        paint(painter);
+ 
+ 
+-            //topRightCorner
+-            if ( rightTitleR.width() > 0 )
+-            {
+-                rect.setRect( widget() ->width() - TOPRIGHTCORNERWIDTH, 0, TOPRIGHTCORNERWIDTH, TITLESIZE );
+-                painter.drawPixmap( rect, decoPixmap[ topRightCorner ][ waState ] );
+-            }
++        if( ! compositingActive() )
++          {
++            QPainter widgetPainter( widget() );
++            widgetPainter.drawPixmap( QPoint(), renderBuffer_ );
+ 
++            // update buttons
++            QList<DeKoratorButton*> buttons( widget()->findChildren<DeKoratorButton*>() );
++            foreach( DeKoratorButton* button, buttons )
++              {
++                if( e->rect().intersects( button->geometry() ) )
++                  { button->update(); }
++              }
++          }
+ 
++    }
+ 
+-            QString c( caption() );
+-            QFontMetrics fm( options() ->font( isActive() ) );
+-            int captionWidth = fm.width( c );
+-            // shadow text effect
+-            if ( USESHDTEXT )
+-            {
++}
+ 
+-                int captionHeight = fm.height( );
+-                int dx = 0, dy = 0;
++void DeKoratorClient::paint( QPainter& painter )
++{
++  WindowActivationState waState = isActive() ? WindowActive : WindowInactive;
+ 
+-                if ( TITLEALIGN == Qt::AlignLeft || captionWidth > titleR.width() )
+-                {
+-                    dx = tx + 1 + ( isActive() ? ACTIVESHDTEXTX : INACTIVESHDTEXTX ) ;
+-                    dy = ( TITLESIZE / 2 ) - ( captionHeight / 2 ) + ( isActive() ? ACTIVESHDTEXTY : INACTIVESHDTEXTY ) ;
+-                }
+-                else if ( TITLEALIGN == Qt::AlignHCenter )
+-                {
+-                    dx = tx + ( tw / 2 ) - ( ( captionWidth + ( MARGIN * 2 ) ) / 2 ) + ( isActive() ? ACTIVESHDTEXTX : INACTIVESHDTEXTX ) ;
+-                    dy = ( TITLESIZE / 2 ) - ( captionHeight / 2 ) + ( isActive() ? ACTIVESHDTEXTY : INACTIVESHDTEXTY ) ;
+-                }
+-                else if ( TITLEALIGN == Qt::AlignRight )
+-                {
+-                    dx = tx + tw - ( captionWidth + ( MARGIN * 2 ) ) - 1 + ( isActive() ? ACTIVESHDTEXTX : INACTIVESHDTEXTX ) ;
+-                    dy = ( TITLESIZE / 2 ) - ( captionHeight / 2 ) + ( isActive() ? ACTIVESHDTEXTY : INACTIVESHDTEXTY ) ;
+-                }
++  int tx, ty, tw, th;
++  int w = width() , h = height();
++  QRect titleR( titleBarSpacer_->geometry() );
++  QRect leftTitleR( leftTitleBarSpacer_->geometry() );
++  QRect rightTitleR( rightTitleBarSpacer_->geometry() );
++  titleR.getRect( &tx, &ty, &tw, &th );
++  QRect rect;
+ 
+-                painter.drawImage( dx, dy, isActive() ? activeShadowImg_ : inActiveShadowImg_, 0, 0, isActive() ? qMin( activeShadowImg_.width(), titleR.width() ) : qMin( inActiveShadowImg_.width(), titleR.width() ), isActive() ? activeShadowImg_.height() : inActiveShadowImg_.height() );
+-            }
++  {
++    // topLeftCorner
+ 
++    if ( leftTitleR.width() > 0 )
++      {
++        rect.setRect( 0, 0, TOPLEFTCORNERWIDTH, TITLESIZE );
++        painter.drawPixmap( rect, decoPixmap[ topLeftCorner ][ waState ] );
++      }
+ 
+-            //draw titleR text
+-            painter.setFont( options() ->font( isActive(), false ) );
+-            painter.setPen( options() ->color( KDecoration::ColorFont, isActive() ) );
++    // Space under the left button group
++    painter.drawTiledPixmap( leftTitleR.right() + 1, titleR.top(),
++                             ( titleR.left() - 1 ) - leftTitleR.right(), titleR.height(), decoPixmap[ leftButtons ][ waState ] );
+ 
+-            Qt::Alignment titleAlignBak = TITLEALIGN;
+-            if ( captionWidth > titleR.width() )
+-                titleAlignBak = Qt::AlignLeft;
++    drawHorizontalTiled( &painter, QRect( tx, 0, tw, TITLESIZE ),
++                         decoPixmap[ leftTitle ][ waState ],
++                         decoPixmap[ midTitle ][ waState ],
++                         decoPixmap[ rightTitle ][ waState ] );
+ 
+-            painter.drawText( tx + MARGIN, ty, tw - ( MARGIN * 2 ), th, titleAlignBak | Qt::AlignVCenter, caption() );
+-        }
++    // Space under the right button group
++    painter.drawTiledPixmap( titleR.right() + 1, titleR.top(),
++                             ( rightTitleR.left() - 1 ) - titleR.right(), titleR.height(), decoPixmap[ rightButtons ][ waState ] );
+ 
+ 
+-        // draw frames
+-        if ( ! isShade() || SHOWBTMBORDER )
+-        {
++    //topRightCorner
++    if ( rightTitleR.width() > 0 )
++      {
++        rect.setRect( widget() ->width() - TOPRIGHTCORNERWIDTH, 0, TOPRIGHTCORNERWIDTH, TITLESIZE );
++        painter.drawPixmap( rect, decoPixmap[ topRightCorner ][ waState ] );
++      }
+ 
+-            if ( h - TITLESIZE - BOTTOMFRAMESIZE > 0 )
+-            {
+-                int leftRightFramesHeight = h - TITLESIZE - BOTTOMFRAMESIZE ;
+ 
+-                //left frame
+-                drawVerticalTiled( &painter, QRect(0, TITLESIZE, LEFTFRAMESIZE, leftRightFramesHeight ),
+-                    decoPixmap[ topLeftFrame ][ waState ],
+-                    decoPixmap[ midLeftFrame ][ waState ],
+-                    decoPixmap[ bottomLeftFrame ][ waState ] );
+-
+-                //rightFrame
+-                drawVerticalTiled( &painter, QRect( w - RIGHTFRAMESIZE, TITLESIZE, RIGHTFRAMESIZE, leftRightFramesHeight ),
+-                    decoPixmap[ topRightFrame ][ waState ],
+-                    decoPixmap[ midRightFrame ][ waState ],
+-                    decoPixmap[ bottomRightFrame ][ waState ] );
+-            }
+ 
+-            // bottom frame
+-            drawHorizontalTiled( &painter, QRect( 0, h - BOTTOMFRAMESIZE, w, BOTTOMFRAMESIZE ),
+-                decoPixmap[ leftBottomFrame ][ waState ],
+-                decoPixmap[ midBottomFrame ][ waState ],
+-                decoPixmap[ rightBottomFrame ][ waState ] );
+-        }
+-        else
++    QString c( caption() );
++    QFontMetrics fm( options() ->font( isActive() ) );
++    int captionWidth = fm.width( c );
++    // shadow text effect
++    if ( USESHDTEXT )
++      {
++
++        int captionHeight = fm.height( );
++        int dx = 0, dy = 0;
++
++        if ( TITLEALIGN == Qt::AlignLeft || captionWidth > titleR.width() )
++          {
++            dx = tx + 1 + ( isActive() ? ACTIVESHDTEXTX : INACTIVESHDTEXTX ) ;
++            dy = ( TITLESIZE / 2 ) - ( captionHeight / 2 ) + ( isActive() ? ACTIVESHDTEXTY : INACTIVESHDTEXTY ) ;
++          }
++        else if ( TITLEALIGN == Qt::AlignHCenter )
++          {
++            dx = tx + ( tw / 2 ) - ( ( captionWidth + ( MARGIN * 2 ) ) / 2 ) + ( isActive() ? ACTIVESHDTEXTX : INACTIVESHDTEXTX ) ;
++            dy = ( TITLESIZE / 2 ) - ( captionHeight / 2 ) + ( isActive() ? ACTIVESHDTEXTY : INACTIVESHDTEXTY ) ;
++          }
++        else if ( TITLEALIGN == Qt::AlignRight )
++          {
++            dx = tx + tw - ( captionWidth + ( MARGIN * 2 ) ) - 1 + ( isActive() ? ACTIVESHDTEXTX : INACTIVESHDTEXTX ) ;
++            dy = ( TITLESIZE / 2 ) - ( captionHeight / 2 ) + ( isActive() ? ACTIVESHDTEXTY : INACTIVESHDTEXTY ) ;
++          }
++
++        painter.drawImage( dx, dy, isActive() ? activeShadowImg_ : inActiveShadowImg_, 0, 0, isActive() ? qMin( activeShadowImg_.width(), titleR.width() ) : qMin( inActiveShadowImg_.width(), titleR.width() ), isActive() ? activeShadowImg_.height() : inActiveShadowImg_.height() );
++      }
++
++
++    //draw titleR text
++    painter.setFont( options() ->font( isActive(), false ) );
++    painter.setPen( options() ->color( KDecoration::ColorFont, isActive() ) );
++
++    Qt::Alignment titleAlignBak = TITLEALIGN;
++    if ( captionWidth > titleR.width() )
++      titleAlignBak = Qt::AlignLeft;
++
++    painter.drawText( tx + MARGIN, ty, tw - ( MARGIN * 2 ), th, titleAlignBak | Qt::AlignVCenter, caption() );
++  }
++
++
++  // draw frames
++  if ( ! isShade() || SHOWBTMBORDER )
++    {
++
++      if ( h - TITLESIZE - BOTTOMFRAMESIZE > 0 )
+         {
+-            painter.setPen( QColor( 70, 70, 70 ) );
+-            painter.drawLine( 0 , h - 1, w, h - 1 );
++          int leftRightFramesHeight = h - TITLESIZE - BOTTOMFRAMESIZE ;
++
++          //left frame
++          drawVerticalTiled( &painter, QRect(0, TITLESIZE, LEFTFRAMESIZE, leftRightFramesHeight ),
++                             decoPixmap[ topLeftFrame ][ waState ],
++                             decoPixmap[ midLeftFrame ][ waState ],
++                             decoPixmap[ bottomLeftFrame ][ waState ] );
++
++          //rightFrame
++          drawVerticalTiled( &painter, QRect( w - RIGHTFRAMESIZE, TITLESIZE, RIGHTFRAMESIZE, leftRightFramesHeight ),
++                             decoPixmap[ topRightFrame ][ waState ],
++                             decoPixmap[ midRightFrame ][ waState ],
++                             decoPixmap[ bottomRightFrame ][ waState ] );
+         }
++
++      // bottom frame
++      drawHorizontalTiled( &painter, QRect( 0, h - BOTTOMFRAMESIZE, w, BOTTOMFRAMESIZE ),
++                           decoPixmap[ leftBottomFrame ][ waState ],
++                           decoPixmap[ midBottomFrame ][ waState ],
++                           decoPixmap[ rightBottomFrame ][ waState ] );
+     }
++  else
++    {
++      painter.setPen( QColor( 70, 70, 70 ) );
++      painter.drawLine( 0 , h - 1, w, h - 1 );
++    }
++
+ }
+ 
+ //////////////////////////////////////////////////////////////////////////////
+@@ -2094,6 +2172,8 @@
+ // Window is being resized
+ void DeKoratorClient::resizeEvent( QResizeEvent *e )
+ {
++    renderBuffer_ = QPixmap( e->size() );
++  
+     if ( USEMASKS )
+     {
+ 
+diff -urN dekorator-0.5.1/client/deKoratorclient.h dekorator-0.5.1-rosa/client/deKoratorclient.h
+--- dekorator-0.5.1/client/deKoratorclient.h	2010-03-31 11:44:11.000000000 +1100
++++ dekorator-0.5.1-rosa/client/deKoratorclient.h	2012-03-23 23:35:09.000000000 +1100
+@@ -37,6 +37,7 @@
+ 
+ #include <kdecorationfactory.h>
+ #include <kdecoration.h>
++#include <kdecorationbridge.h>
+ 
+ #include <QtGui/QAbstractButton>
+ #include <QtGui/QBitmap>
+@@ -184,7 +185,7 @@
+ {
+     Q_OBJECT
+ public:
+-    DeKoratorButton( DeKoratorClient *parent = 0, const char *name = 0,
++    explicit DeKoratorButton( DeKoratorClient *parent = 0, const char *name = 0,
+                      const QString &tip = NULL, ButtonType type = ButtonHelp, buttonTypeAll btnType = restore );
+     ~DeKoratorButton();
+ 
+@@ -202,6 +203,7 @@
+     void mousePressEvent( QMouseEvent *e );
+     void mouseReleaseEvent( QMouseEvent *e );
+     void paintEvent( QPaintEvent *e );
++    void resizeEvent( QResizeEvent * );
+     QImage chooseRightHoverEffect( const QImage &img, QString res );
+ 
+ private:
+@@ -215,6 +217,9 @@
+     uint animProgress;
+     buttonTypeAll btnType_;
+     int s;
++
++    QPixmap renderBuffer_;
++
+ };
+ 
+ inline Qt::MouseButton DeKoratorButton::lastMousePress() const
+@@ -256,6 +261,10 @@
+     virtual QSize minimumSize() const;
+     virtual Position mousePosition( const QPoint &point ) const;
+ 
++    bool compositingActive() const;
++
++    void paint( QPainter& painter );
++    
+ private:
+     void addButtons( QBoxLayout* layout, const QString& buttons );
+ 
+@@ -268,7 +277,6 @@
+     void doShape();
+     void updateCaptionBuffer();
+ 
+-
+ private slots:
+     void maxButtonPressed();
+     void menuButtonPressed();
+@@ -280,9 +288,10 @@
+     void menuButtonReleased();
+ 
+ private:
++    KDecorationBridge *bridge_;
+     DeKoratorButton *button[ ButtonTypeCount ];
+     QVBoxLayout *mainLayout_;
+-    QHBoxLayout *titleLayout_ ;
++    QHBoxLayout *titleLayout_;
+     QHBoxLayout *midLayout_;
+     QSpacerItem *leftTitleBarSpacer_, *titleBarSpacer_, *rightTitleBarSpacer_, *leftSpacer_, *rightSpacer_, *bottomSpacer_;
+     bool closing_;
+@@ -291,6 +300,8 @@
+     QRegion mask_;
+     bool sizeChanged;
+     QSize oldSize_;
++
++    QPixmap renderBuffer_;
+ };
+ 
+ 
