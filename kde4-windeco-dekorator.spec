@@ -39,10 +39,10 @@ You can find themes at http://www.kde-look.org/index.php?xcontentmode=21
 %install
 pushd build
 %makeinstall_std
-%__tar xf %{SOURCE1}
-%__mkdir -p %{buildroot}/%{_kde_appsdir}/deKorator/themes/
-%__cp -r Elementary %{buildroot}/%{_kde_appsdir}/deKorator/themes/
-%__mkdir -p %{buildroot}/%{_kde_configdir}/
-%__cp %{SOURCE2} %{buildroot}/%{_kde_configdir}/
+tar xf %{SOURCE1}
+mkdir -p %{buildroot}/%{_kde_appsdir}/deKorator/themes/
+cp -r Elementary %{buildroot}/%{_kde_appsdir}/deKorator/themes/
+mkdir -p %{buildroot}/%{_kde_configdir}/
+cp %{SOURCE2} %{buildroot}/%{_kde_configdir}/
 popd
 
