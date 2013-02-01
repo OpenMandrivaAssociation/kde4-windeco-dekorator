@@ -1,6 +1,6 @@
 Name:		kde4-windeco-dekorator
 Version:	0.5.1
-Release:	8
+Release:	11
 Summary:	Themable and Customizable Window Decoration Engine for KDE 4
 Group:		Graphical desktop/KDE
 License:	GPLv2+
