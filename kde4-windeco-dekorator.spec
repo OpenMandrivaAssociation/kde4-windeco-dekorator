@@ -1,7 +1,7 @@
+Summary:	Themable and Customizable Window Decoration Engine for KDE 4
 Name:		kde4-windeco-dekorator
 Version:	0.5.1
 Release:	13
-Summary:	Themable and Customizable Window Decoration Engine for KDE 4
 Group:		Graphical desktop/KDE
 License:	GPLv2+
 Url:		http://www.kde-look.org/content/show.php?content=87921
@@ -10,7 +10,7 @@ Source1:	elementary-emerald-theme.tar.gz
 Source2:	kwindeKoratorrc
 Patch0:		dekorator-0.5.1-kde4.8-rosa.patch
 BuildRequires:	kdebase4-workspace-devel
-BuildRequires:	qimageblitz-devel
+BuildRequires:	pkgconfig(qimageblitz)
 Suggests:	kde4-kwin-dekorator-themes
 
 %description
@@ -29,8 +29,8 @@ You can find themes at http://www.kde-look.org/index.php?xcontentmode=21
 #--------------------------------------------------------------------
 
 %prep
-%setup -q -n dekorator-%{version}
-%patch0 -p1
+%setup -qn dekorator-%{version}
+%apply_patches
 
 %build
 %cmake_kde4
