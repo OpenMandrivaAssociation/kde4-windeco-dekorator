@@ -30,7 +30,7 @@ You can find themes at http://www.kde-look.org/index.php?xcontentmode=21
 
 %prep
 %setup -qn dekorator-%{version}
-%apply_patches
+%autopatch -p1
 
 %build
 %cmake_kde4
