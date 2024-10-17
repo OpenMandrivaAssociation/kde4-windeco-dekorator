@@ -4,7 +4,7 @@ Version:	0.5.1
 Release:	23
 Group:		Graphical desktop/KDE
 License:	GPLv2+
-Url:		http://www.kde-look.org/content/show.php?content=87921
+Url:		https://www.kde-look.org/content/show.php?content=87921
 Source0:	dekorator-%{version}.tar.bz2
 Source1:	elementary-emerald-theme.tar.gz
 Source2:	kwindeKoratorrc
