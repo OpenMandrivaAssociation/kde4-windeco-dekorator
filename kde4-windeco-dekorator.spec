@@ -9,6 +9,7 @@ Source0:	dekorator-%{version}.tar.bz2
 Source1:	elementary-emerald-theme.tar.gz
 Source2:	kwindeKoratorrc
 Patch0:		dekorator-0.5.1-kde4.8-rosa.patch
+BuildRequires:	make
 BuildRequires:	kdebase4-workspace-devel
 BuildRequires:	pkgconfig(qimageblitz)
 Suggests:	kde4-kwin-dekorator-themes
